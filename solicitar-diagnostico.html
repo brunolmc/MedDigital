@@ -39,6 +39,9 @@
   .opt .dot{flex:0 0 20px;width:20px;height:20px;border-radius:50%;border:2px solid var(--mid);position:relative}
   .opt.sel .dot{border-color:var(--gold)}
   .opt.sel .dot::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--gold)}
+  .opt .dot.sq{border-radius:5px}
+  .opt.sel .dot.sq::after{border-radius:2px}
+  .multi-tip{color:#8A93A0;font-size:.85rem;margin:2px 0 6px}
   .row{display:flex;align-items:center;gap:14px;margin-top:26px}
   .btn{display:inline-flex;align-items:center;gap:8px;border:0;cursor:pointer;font-weight:700;font-size:1rem;padding:13px 26px;border-radius:11px;font-family:var(--sans)}
   .btn-gold{background:var(--gold);color:var(--navy)}
@@ -96,7 +99,7 @@ const Q = [
  {id:"esp", type:"text", req:true, q:"Qual é a sua especialidade?", ph:"Ex.: Cardiologia, Ortopedia…"},
  {id:"cidade", type:"text", req:true, q:"Em qual cidade você atende?", ph:"Cidade – Estado"},
  {id:"site", type:"text", q:"Você já tem site? Se sim, qual é o endereço?", hint:["Sim: www.[seusite].com.br","Não tenho ainda"]},
- {id:"objetivo", type:"choice", q:"O que você mais quer alcançar agora?", op:["Atrair mais pacientes particulares","Ter um site profissional e confiável","Aparecer no Google na minha cidade","Organizar e crescer minhas redes sociais","Outro / vários destes"]},
+ {id:"objetivo", type:"choice", multi:true, q:"O que você mais quer alcançar agora?", op:["Atrair mais pacientes particulares","Ter um site profissional e confiável","Aparecer no Google na minha cidade","Organizar e crescer minhas redes sociais","Outro"]},
  {id:"contato", type:"text", req:true, q:"Qual o melhor WhatsApp ou e-mail para retornarmos?", ph:"WhatsApp ou e-mail"},
  {id:"obs", type:"text", q:"Quer nos contar mais alguma coisa? (opcional)", ph:"Opcional"},
 ];
@@ -125,6 +128,7 @@ function render(){
   if(q.blk) h += `<div class="eyebrow">Bloco ${q.blk} · ${BLOCKS[q.blk]}</div>`;
   if(q.code) h += `<span class="code">${q.code}</span>`;
   h += `<h1 class="q">${q.q}</h1>`;
+  if(q.type==='choice' && q.multi) h += `<p class="multi-tip">Pode marcar mais de uma opção</p>`;
   if(q.type==='text'){
     if(q.hint){ h+=`<div class="hint"><b>Exemplos</b>`; q.hint.forEach(x=>h+=`<span>› ${x}</span>`); h+=`</div>`; }
     const val = answers[q.id]||'';
@@ -133,9 +137,12 @@ function render(){
     if(!q.req) h += `<button class="btn btn-ghost" onclick="skip()">Pular</button>`;
     h += `</div>`;
   } else {
+    const cur = answers[q.id];
+    const isSel = (o)=> q.multi ? (Array.isArray(cur)&&cur.includes(o)) : cur===o;
     h += `<div class="opts">`;
-    q.op.forEach((o,idx)=>{ const sel = answers[q.id]===o?' sel':''; h+=`<button class="opt${sel}" onclick="pick('${q.id}',${idx})"><span class="dot"></span><span>${o}</span></button>`; });
+    q.op.forEach((o,idx)=>{ const sel = isSel(o)?' sel':''; const sq = q.multi?' sq':''; h+=`<button class="opt${sel}" onclick="pick('${q.id}',${idx})"><span class="dot${sq}"></span><span>${o}</span></button>`; });
     h += `</div>`;
+    if(q.multi){ h += `<div class="row"><button class="btn btn-gold" onclick="next()">Continuar</button>`; if(!q.req) h += `<button class="btn btn-ghost" onclick="skip()">Pular</button>`; h += `</div>`; }
   }
   h += `</div>`;
   stage.innerHTML = h;
@@ -167,7 +174,11 @@ function renderEnd(){
     <p class="small">As respostas vão para <b>${EMAIL}</b>. Se o app de e-mail abrir cortado, toque em <b>Copiar respostas</b> e cole no e-mail.</p></div>`;
 }
 
-function pick(id, idx){ answers[id] = Q.find(x=>x.id===id).op[idx]; render(); setTimeout(next, 220); }
+function pick(id, idx){
+  const q = Q.find(x=>x.id===id); const val = q.op[idx];
+  if(q.multi){ let arr = Array.isArray(answers[id])?answers[id].slice():[]; const k=arr.indexOf(val); if(k>=0) arr.splice(k,1); else arr.push(val); answers[id]=arr; render(); }
+  else { answers[id]=val; render(); setTimeout(next, 220); }
+}
 function saveText(){ const inp=document.getElementById('inp'); if(inp){ const q=Q[i]; answers[q.id]=inp.value.trim(); } }
 function next(){ if(i>=0 && i<Q.length){ const q=Q[i]; if(q.type==='text'){ saveText(); if(q.req && !answers[q.id]){ document.getElementById('inp').focus(); return; } } } i++; render(); window.scrollTo(0,0); }
 function skip(){ answers[Q[i].id]=''; i++; render(); window.scrollTo(0,0); }
@@ -184,7 +195,7 @@ function buildSummary(){
   let curBlk=null;
   Q.forEach(q=>{
     if(q.id==='nome'||q.id==='contato') return;
-    const a = answers[q.id];
+    let a = answers[q.id]; if(Array.isArray(a)) a = a.join('; ');
     if(q.blk){
       if(q.blk!==curBlk){ curBlk=q.blk; s += "\nBLOCO " + q.blk + " — " + BLOCKS[q.blk].toUpperCase() + "\n"; }
       s += "\n" + q.code + ". " + q.q + "\n→ " + (a && a.length ? a : "(não respondido)") + "\n";
